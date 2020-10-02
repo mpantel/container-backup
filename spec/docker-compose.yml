@@ -1,0 +1,263 @@
+version: "3.6"
+services:
+
+  traefik:
+    hostname: traefik
+    image: traefik:1.7.16
+    container_name: traefik
+    restart: always
+    domainname: demo.${DOMAINNAME}
+    networks:
+      - default
+      - internal_net
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=internal_net"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DOCKER_CONF_DIR}/traefik${DOCKER_ENV}:/etc/traefik
+      - ${DOCKER_CONF_DIR}/shared:/shared
+
+# https://hub.docker.com/_/mongo/
+  demo-mongo:
+    image: mongo
+    container_name: "demo-mongo"
+    restart: always
+    # ports:
+    #   - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - internal_net
+    labels:
+      - "backup={volumes: [mongo_data],databases: [mongo: {user: ${MONGO_INITDB_ROOT_USERNAME}, password: ${MONGO_INITDB_ROOT_PASSWORD}}]}"
+
+  # mongo-express:
+  #   image: mongo-express
+  #   container_name: "demo-mongo-express"
+  #   restart: "no"
+  #   depends_on:
+  #     - demo-mongo
+  #   ports:
+  #     - 8081:8081
+  #   environment:
+  #   - "ME_CONFIG_OPTIONS_EDITORTHEME=ambiance"
+  #   - "ME_CONFIG_MONGODB_SERVER=demo-mongo"
+  #   - "ME_CONFIG_MONGODB_PORT=27017"
+  #   - "ME_CONFIG_MONGODB_ENABLE_ADMIN=true"
+  #   - "ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}"
+  #   - "ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}"
+  #   networks:
+  #     - internal_net
+
+  demo-influxdb:
+    image: "influxdb:latest"
+    container_name: "demo-influxdb"
+    restart: always
+    ports:
+      - "${INFLUXDB_HTTP_PORT}:8086"
+      - "${INFLUXDB_GRAPHITE_PORT}:2003"
+    networks:
+      - internal_net
+    environment:
+      - "PUID=${PUID}"
+      - "PGID=${PGID}"
+      - "TZ=${TZ}"
+      - "INFLUXDB_HTTP_AUTH_ENABLED=true"
+      - "INFLUXDB_ADMIN_USER=${INFLUXDB_ADMIN_USER}"
+      - "INFLUXDB_ADMIN_PASSWORD=${INFLUXDB_ADMIN_PASSWORD}"
+      - "INFLUXDB_GRAPHITE_ENABLED=true"
+      - "INFLUXDB_REPORTING_DISABLED=true"
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    labels:
+      - "backup={volumes: [influxdb_data],databases: [influxdb: {user: ${INFLUXDB_ADMIN_USER},password: ${INFLUXDB_ADMIN_PASSWORD}}]}"
+  demo-chronograf:
+    image: "chronograf"
+    container_name: "demo-chronograf"
+    restart: "no"
+    ports:
+      - "${CHRONOGRAF_PORT}:8888"
+    networks:
+      - internal_net
+    command:
+      - "--influxdb-url=http://demo-influxdb:${INFLUXDB_HTTP_PORT}"
+      - "--influxdb-username=${INFLUXDB_ADMIN_USER}"
+      - "--influxdb-password=${INFLUXDB_ADMIN_PASSWORD}"
+    environment:
+      - "PUID=${PUID}"
+      - "PGID=${PGID}"
+      - "TZ=${TZ}"
+    volumes:
+      - "./chronograf/config:/etc/chronograf"
+      - chronograf_data:/var/lib/chronograf
+    labels:
+      - "backup={volumes: [chronograf_data],databases: [chronograf]}"
+
+  demo-website:
+    image: demo-drupal-image
+    build: ../demo-website
+    container_name: "demo-website"
+    expose:
+      - 80
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_SERVER: ${MYSQL_SERVER}
+      MYSQL_demo_USER: ${MYSQL_demo_USER}
+
+    volumes:
+      - ../demo-website/libraries:/var/www/html/libraries
+      - ../demo-website/modules:/var/www/html/modules
+      - ../demo-website/profiles:/var/www/html/profiles
+      - ../demo-website/themes:/var/www/html/themes
+      - ../demo-website/sites:/var/www/html/sites
+    restart: always
+    depends_on:
+      - traefik
+      - demo-mysql
+    labels:
+      - traefik.enable=true
+      - "traefik.frontend.rule=Host:demo.${DOMAINNAME}"
+      - traefik.frontend.entryPoints=http,https
+      - "backup={directories: [/var/www/html/libraries, /var/www/html/modules, /var/www/html/profiles, /var/www/html/themes, /var/www/html/sites]}"
+
+  demo-mysql:
+    image: mariadb
+    hostname: demo-mysql
+    restart: always
+    container_name: "demo-mysql"
+    ports:
+      - "127.0.0.1:3306:3306"
+    expose:
+      - "3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_SERVER: ${MYSQL_SERVER}
+      MYSQL_demo_USER: ${MYSQL_demo_USER}
+      #MYSQL_USER: "${MYSQL_USER}"
+      #MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+    volumes:
+      - drupal_mysql_data:/var/lib/mysql
+      - ../demo-website/db:/root/backups
+    labels:
+      - traefik.enable=false
+      - "backup={volumes: [drupal_mysql_data],databases: [mysql: {db: ${MYSQL_DATABASE},password: ${MYSQL_ROOT_PASSWORD},user: root}]}"
+    networks:
+      default:
+
+  demo-auth:
+    image: "${PRIVATE_REGISTRY}/demo-auth"
+    container_name: "demo-auth"
+    restart: always
+    external_links:
+      - demo-mongo
+      - traefik
+    networks:
+      - internal_net
+    environment:
+      - "TZ=${TZ}"
+      - "DB_URI=mongodb://${MONGO_demo_USER}:${MONGO_demo_PASS}@demo-mongo:27017/${MONGO_demo_DB}"
+      - "JWT_SECRET=${demo_JWT_SECRET}"
+      - "JWT_EXP=${demo_JWT_EXP}"
+      - "PORT=${demo_AUTH_PORT}"
+      - "LOG_LEVEL=${demo_LOG_LEVEL}"
+      - "EXTERNAL_URL=${demo_AUTH_URL}"
+      - "ADMIN_URL=${demo_ADMIN_URL}"
+      - "DASHBOARD_URL=${demo_DASHBOARD_URL}"
+      - "SMTP_HOST=${SMTP_HOST}"
+      - "SMTP_PORT=${SMTP_PORT}"
+      - "SMTP_SECURE=${SMTP_SECURE}"
+      - "SMTP_USER=${SMTP_USER}"
+      - "SMTP_USER_FROM=${SMTP_USER_FROM}"
+      - "SMTP_PASS=${SMTP_PASS}"
+      - "NODE_ENV=production"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.frontend.rule=Host:demo-auth.${DOMAINNAME}"
+    depends_on:
+      - demo-mongo
+
+  demo-api:
+    image: "${PRIVATE_REGISTRY}/demo-api"
+    container_name: "demo-api"
+    restart: always
+    external_links:
+      - demo-mongo
+      - traefik
+    networks:
+      - internal_net
+    environment:
+      - "TZ=${TZ}"
+      - "DB_URI=mongodb://${MONGO_demo_USER}:${MONGO_demo_PASS}@demo-mongo:27017/${MONGO_demo_DB}"
+      - "INFLUXDB_DSN=${demo_INFLUXDB_DSN}"
+      - "JWT_SECRET=${demo_JWT_SECRET}"
+      - "PORT=${demo_API_PORT}"
+      - "JOB_TYPES=${JOB_TYPES}"
+      - "OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}"
+      - "LOG_LEVEL=${demo_LOG_LEVEL}"
+      - "NODE_ENV=${NODE_ENV}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.frontend.rule=Host:demo-api.${DOMAINNAME}"
+    depends_on:
+      - demo-auth
+
+  demo-app:
+    image: "${PRIVATE_REGISTRY}/demo-app"
+    container_name: "demo-app"
+    restart: always
+    depends_on:
+      - demo-auth
+      - demo-api
+    external_links:
+      - traefik
+    networks:
+      - internal_net
+    environment:
+      - "TZ=${TZ}"
+      - "PORT=https://${demo_ADMIN_URL}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.frontend.rule=Host:demo-dashboard.${DOMAINNAME}"
+
+  demo-admin:
+    image: "${PRIVATE_REGISTRY}/demo-admin"
+    container_name: "demo-admin"
+    restart: always
+    depends_on:
+      - demo-auth
+      - demo-api
+    external_links:
+      - traefik
+    networks:
+      - internal_net
+    environment:
+      - "TZ=${TZ}"
+      - "NODE_ENV=${NODE_ENV}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.frontend.rule=Host:demo-dashboard.${DOMAINNAME};PathPrefixStrip:/admin"
+
+volumes:
+  drupal_mysql_data:
+  mongo_data:
+  influxdb_data:
+  chronograf_data:
+
+# docker create network traefik_proxy
+# docker create network internal_net
+networks:
+  internal_net:
+    external:
+      name: internal_net
+  default:
+    driver: bridge
