@@ -1,3 +1,10 @@
+require "bundler/gem_tasks"
+require "rspec/core/rake_task"
+
+RSpec::Core::RakeTask.new(:spec)
+
+task :default => :spec
+
 require 'yaml'
 require 'fileutils'
 require 'byebug' rescue nil
@@ -89,6 +96,7 @@ namespace :db do
   task :backup do
 
   end
+
 
 
   desc "Restore DBs"
