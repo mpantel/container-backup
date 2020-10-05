@@ -6,14 +6,12 @@ module Container
       YAML.load_file(file)
     end
 
-    def initialize
-      @file = 'samples/docker-compose.yml'
-      @service_tag = 'services'
-      @config = load_config(@file)
+    def initialize(file)
+      @config = load_config(file)
     end
 
     def services
-      @services ||= @config[@service_tag.to_s]
+      @services ||= @config['services']
     end
 
     def parse_env(string = nil)
