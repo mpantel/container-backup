@@ -1,6 +1,15 @@
 module Container
   module Backup
     class Directories < Step
+
+      def stop
+        sh "#{DockerCompose.docker_compose} stop #{container}"
+      end
+
+      def start
+        sh "#{DockerCompose.docker_compose} up -d #{container}"
+      end
+
       def tar_volume(option)
         raise "Invalid tar option #{option}" unless option =~ /\A[cx]\z/
         sh "docker run --rm --volumes-from #{container} -v #{backup_path}:/backup ubuntu bash -c \"cd #{volume} && tar #{option}vf /backup/#{volume}.tar #{option == 'c' ? ' .' : ''}\""
@@ -17,6 +26,13 @@ module Container
         remove_volume
         recover_volume
         start
+      end
+      def backup_volume
+        tar_volume('c')
+      end
+
+      def recover_volume
+        tar_volume('x')
       end
 
       def remove_volume

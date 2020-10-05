@@ -1,10 +1,12 @@
+require 'rake'
 require 'rake/file_utils_ext'
+
 module Container
   module Backup
     class StepFactory
       def self.get_class(type)
         klass = Object.const_get(['Container', 'Backup', type.capitalize].join('::'))
-        if klass.superclass == Container::Backup::Step
+        if klass.ancestors.include? Container::Backup::Step
           klass
         else
           raise 'Unknown step for #{klass}'
@@ -12,17 +14,19 @@ module Container
       end
 
       def self.generate(container, directory, backup, actions)
-        actions.flat_map do |type, steps|
-          steps.map do |param|
-            if Object.const_get(['Container', 'Backup', type.capitalize].join('::')).superclass == Container::Backup::StepFactory
-              (param.is_a?(String) ? {param => {}} : param).map do |type, param|
+        actions.map do |a|
+          a.map do |type, steps|
+            steps.map do |param|
+              if Object.const_get(['Container', 'Backup', type.capitalize].join('::')).superclass == Container::Backup::StepFactory
+                (param.is_a?(String) ? {param => {}} : param).map do |type, param|
+                  StepFactory.build(container, directory, backup, type, param)
+                end
+              else
                 StepFactory.build(container, directory, backup, type, param)
               end
-            else
-              StepFactory.build(container, directory, backup, type, param)
             end
-          end.flatten
-        end
+          end
+        end.flatten
       end
 
       def self.build(container, directory, backup, type, params)
@@ -38,15 +42,21 @@ module Container
     class Step
       include Rake::FileUtilsExt
 
-      def initialize(container, directory, backup, params)
-        @container = container
+      def initialize(container_info, directory, backup, params_hash)
+        @container_info = container_info
         @directory = directory
         @backup = backup
-        @params = params
+        @params = params_hash
       end
 
+      def params
+        @params
+      end
       def container
-        @container
+        @container_info.keys.first
+        end
+      def image
+        @container_info.values.first
       end
 
       def backup_path

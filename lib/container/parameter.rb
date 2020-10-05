@@ -19,7 +19,7 @@ Handles:
 BANNER
 
       args[:filename] = 'docker-compose.yml'
-      opts.on("-f", "--filename=DOCKERFILE", "Docker file with backup/restore configuration") do |n|
+      opts.on("-f", "--file=DOCKERFILE", "Docker file with backup/restore configuration") do |n|
         args[:filename] = n
       end
       args[:backup] = true

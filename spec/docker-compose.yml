@@ -151,6 +151,7 @@ services:
     labels:
       - traefik.enable=false
       - "backup={volumes: [drupal_mysql_data],databases: [mysql: {db: ${MYSQL_DATABASE},password: ${MYSQL_ROOT_PASSWORD},user: root}]}"
+      - "backup.1={databases: [mysql: {db: ${MYSQL_DATABASE}2,password: ${MYSQL_ROOT_PASSWORD},user: root}]}"
     networks:
       default:
 
