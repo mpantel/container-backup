@@ -1,3 +1,4 @@
+require 'rake/file_utils_ext'
 module Container
   module Backup
     class StepFactory
@@ -24,8 +25,8 @@ module Container
         end
       end
 
-      def self.build(container, directory, backup, type, step)
-        StepFactory.get_class(type).new(container, directory, backup, step)
+      def self.build(container, directory, backup, type, params)
+        StepFactory.get_class(type).new(container, directory, backup, params)
       end
 
     end
@@ -35,11 +36,21 @@ module Container
     end
 
     class Step
-      def initialize(container, directory, backup, step)
+      include Rake::FileUtilsExt
+
+      def initialize(container, directory, backup, params)
         @container = container
         @directory = directory
         @backup = backup
-        @step = step
+        @params = params
+      end
+
+      def container
+        @container
+      end
+
+      def backup_path
+        [@directory, container, self.class.name.split('::').last.downcase].join('/')
       end
 
       def perform
@@ -47,41 +58,14 @@ module Container
       end
 
       def backup
-        puts "Backup: #{self.class} container: #{@container} step: #{@step}"
+        puts "Backup path: #{backup_path}"
+        puts "Backup: #{self.class} container: #{container} params: #{@params}"
       end
 
       def restore
-        puts "Restore: #{self.class} container: #{@container} step: #{@step}"
+        puts "Backup path: #{backup_path}"
+        puts "Restore: #{self.class} container: #{container} params: #{@params}"
       end
     end
-
-    class Mysql < Step
-
-    end
-
-    class Mssql < Step
-
-    end
-
-    class Mongo < Step
-
-    end
-
-    class Chronograf < Step
-
-    end
-
-    class Influxdb < Step
-
-    end
-
-    class Directories < Step
-
-    end
-
-    class Volumes < Step
-
-    end
-
   end
 end
