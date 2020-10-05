@@ -17,8 +17,6 @@ module Container
         pp backups if  parameters[:review]
         parameters[:containers] = backups.keys if parameters[:containers].size == 0
         containers =  parameters[:containers] - ( parameters[:containers]- backups.keys.map(&:keys).flatten)
-        pp containers if parameters[:review]
-        pp backups.keys if parameters[:review]
         backups.keys.select{|k| containers.include?(k.keys.first)}.each do |container_info|
           backup = :details if parameters[:details]
           backup ||= parameters[:backup] && !parameters[:restore]
