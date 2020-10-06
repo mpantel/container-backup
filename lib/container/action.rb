@@ -1,6 +1,7 @@
 require "container/docker_compose"
 require "container/parameter"
 require "container/step_factory"
+require "container/step"
 require "container/steps/directories"
 require "container/steps/volumes"
 require "container/steps/databases"

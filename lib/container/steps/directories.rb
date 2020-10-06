@@ -1,7 +1,7 @@
 module Container
   module Backup
     class Directories < Step
-
+      #  - "backup={directories: [/var/www/html/libraries, /var/www/html/modules, /var/www/html/profiles, /var/www/html/themes, /var/www/html/sites]}"
       def stop
         sh "#{DockerCompose.docker_compose} stop #{container}"
       end

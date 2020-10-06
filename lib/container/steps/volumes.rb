@@ -1,7 +1,7 @@
 module Container
   module Backup
     class Volumes < Directories
-
+      #       - "backup={volumes: [influxdb_data],databases: [influxdb: {user: ${INFLUXDB_ADMIN_USER},password: ${INFLUXDB_ADMIN_PASSWORD}}]}"
       def remove_container
         puts "Remove container #{container} (y/n)?"
         if gets.chomp == 'y'
@@ -22,7 +22,6 @@ module Container
         else
           exit
         end
-
       end
 
       def create_volume

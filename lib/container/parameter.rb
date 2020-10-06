@@ -8,7 +8,7 @@ class Parameter
 
       opts.banner = <<BANNER
 
-Usage: #{File.basename($0)} [options] container_names"
+Usage: #{File.basename($0)} [options] container_names
 
 Back up or restore container assets base on docker-compose label configuration
 Handles:
